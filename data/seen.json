@@ -1,1 +1,18 @@
-{}
+{
+  "CTFtime:3207": "2026-10-25",
+  "Luma:evt-AFAFNitVinVDsYG": "2026-10-18",
+  "Luma:evt-zvtIdVhEiJNfr0b": "2026-10-18",
+  "ai-deadlines:cvpr27": "2027-06-26",
+  "ai-deadlines:icra27": "2027-05-28",
+  "banc d essai 1 build club securite de l ia|2026-10-18": "2026-10-18",
+  "build agents that remember hackathon 42paris|2026-10-16": "2026-10-18",
+  "build it summit|2026-12-01": "2026-12-03",
+  "ccs acm conference on computer and communications security|2026-11-15": "2026-11-19",
+  "confs.tech:https://builditsummit.com|2026-12-01": "2026-12-03",
+  "confs.tech:https://nullcon.net/event/nullcon-berlin-2026|2026-11-02": "2026-11-06",
+  "cvpr ieee cvf conference on computer vision and pattern recognition|2027-06-19": "2027-06-26",
+  "hack lu ctf|2026-10-23": "2026-10-25",
+  "icra ieee international conference on robotics and automation|2027-05-24": "2027-05-28",
+  "nullcon berlin|2026-11-02": "2026-11-06",
+  "sec-deadlines:CCS2026": "2026-11-19"
+}
