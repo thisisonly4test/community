@@ -1,0 +1,85 @@
+name: Community Radar
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Test : afficher le digest dans les logs sans l'envoyer ni modifier seen.json"
+        type: boolean
+        default: false
+  # Les sources se mettent à jour au fil de l'eau : un passage par jour suffit.
+  schedule:
+    - cron: "0 7 * * *"
+
+permissions:
+  contents: write
+
+# Deux runs en parallèle enverraient les mêmes événements et se disputeraient seen.json.
+concurrency:
+  group: community-radar
+  cancel-in-progress: false
+
+jobs:
+  community-radar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Install dependencies
+        run: python -m pip install --quiet -r requirements.txt
+
+      - name: Run Community Radar
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: python -u main.py
+
+      - name: Commit seen events
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          git config user.name "Community Radar Bot"
+          git config user.email "community-radar-bot@users.noreply.github.com"
+
+          if [ -z "$(git status --porcelain -- data/seen.json)" ]; then
+            echo "No seen.json changes to commit."
+            exit 0
+          fi
+
+          git add data/seen.json
+          git commit -m "chore: update seen events"
+
+          # main a pu avancer pendant le run : on rejoue le commit par-dessus.
+          for attempt in 1 2 3; do
+            git pull --rebase origin main && git push && exit 0
+            sleep 5
+          done
+          exit 1
+
+      # Sans cette alerte, un run en échec ressemble à un jour sans nouveauté.
+      - name: Notify Discord on failure
+        if: failure()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python - <<'PY'
+          import json, os, urllib.request
+
+          payload = {"content": f"❌ Community Radar a échoué : {os.environ['RUN_URL']}"}
+          request = urllib.request.Request(
+              os.environ["DISCORD_WEBHOOK"],
+              data=json.dumps(payload).encode("utf-8"),
+              headers={"Content-Type": "application/json", "User-Agent": "CommunityRadar"},
+          )
+          urllib.request.urlopen(request, timeout=30)
+          PY

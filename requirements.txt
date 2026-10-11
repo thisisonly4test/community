@@ -1,0 +1,4 @@
+# Version figée : une mise à jour cassante ne doit pas couper la collecte.
+# Le bot n'utilise sinon que la bibliothèque standard. Sans PyYAML, seules
+# les sources académiques (sec-deadlines, ai-deadlines) sont ignorées.
+pyyaml==6.0.3
