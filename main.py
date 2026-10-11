@@ -22,8 +22,6 @@ MONTHS = [
     "juil.", "août", "sept.", "oct.", "nov.", "déc.",
 ]
 
-COUNTRY_FLAGS = {"france": "🇫🇷", "fr": "🇫🇷"}
-
 
 # ---------------------------------------------------------------- mémoire
 
@@ -78,138 +76,178 @@ def mark_seen(seen, events):
 # ---------------------------------------------------------------- mise en forme
 
 
-def format_day(value):
-    day = date.fromisoformat(value)
-    return f"{WEEKDAYS[day.weekday()]} {day.day} {MONTHS[day.month - 1]} {day.year}"
+# Une couleur par format : l'œil repère le type avant de lire.
+KIND_COLORS = {
+    "academic": 0x9B59B6,
+    "conference": 0x3498DB,
+    "hackathon": 0xE67E22,
+    "ctf": 0xE74C3C,
+    "meetup": 0x2ECC71,
+}
+
+# Sections du digest, dans l'ordre d'affichage.
+SECTIONS = [
+    ("france", "🇫🇷 En France"),
+    ("major", "🌍 Grandes conférences"),
+    ("online", "🌐 En ligne"),
+]
+
+# Raisons déjà visibles ailleurs dans la carte (lieu, thème) : inutile de les répéter.
+REDUNDANT_REASONS = {"en France", "en ligne", "tech", "cybersécurité", "robotique"}
 
 
-def format_dates(event, today=None):
+def format_day(value, today=None, weekday=True):
     today = today or date.today()
-    start = date.fromisoformat(event["start"])
-    end = date.fromisoformat(event["end"])
-
-    text = format_day(event["start"])
-    if end != start:
-        text += f" → {format_day(event['end'])}"
-
-    days = (start - today).days
-    if days > 1:
-        text += f" (dans {days} j)"
-    elif days == 1:
-        text += " (demain)"
-    elif days == 0:
-        text += " (aujourd'hui)"
-    else:
-        text += " (déjà ouvert)"
-
+    day = date.fromisoformat(value)
+    text = f"{day.day} {MONTHS[day.month - 1]}"
+    if weekday:
+        text = f"{WEEKDAYS[day.weekday()]} {text}"
+    if day.year != today.year:
+        text += f" {day.year}"
     return text
 
 
+def format_countdown(event, today=None):
+    today = today or date.today()
+    days = (date.fromisoformat(event["start"]) - today).days
+    if days > 1:
+        return f"dans {days} j"
+    if days == 1:
+        return "demain"
+    if days == 0:
+        return "aujourd'hui"
+    return "déjà ouvert"
+
+
+def format_dates(event, today=None):
+    text = f"**{format_day(event['start'], today)}**"
+    if event["end"] != event["start"]:
+        text += f" → {format_day(event['end'], today)}"
+    return f"{text}  ·  *{format_countdown(event, today)}*"
+
+
 def format_place(event):
-    place = ", ".join(part for part in (event.get("city"), event.get("country")) if part)
-    flag = COUNTRY_FLAGS.get((event.get("country") or "").lower(), "📍")
-    if event.get("location_class") == "france" and flag == "📍":
-        flag = "🇫🇷"
+    city = event.get("city") or ""
+    country = event.get("country") or ""
+    if event.get("location_class") == "france":
+        country = "France"
+
+    if city and country and city != country:
+        place = f"**{city}**, {country}"
+    else:
+        place = f"**{city or country}**" if city or country else ""
+
+    if event.get("location_class") == "france":
+        place += " 🇫🇷"
 
     if place and event.get("online"):
-        return f"{flag} {place} + 🌐 en ligne"
+        return f"📍 {place}  ·  🌐 aussi en ligne"
     if place:
-        return f"{flag} {place}"
+        return f"📍 {place}"
     if event.get("online"):
-        return "🌐 En ligne"
+        return "🌐 **En ligne**"
     return "📍 Lieu non précisé"
 
 
 def build_extras(event, today=None):
     today = today or date.today()
-    lines = []
+    extras = []
 
-    if event.get("cfp_end"):
-        days = (date.fromisoformat(event["cfp_end"]) - today).days
-        if days >= 0:
-            lines.append(f"📝 Appel à contributions jusqu'au {format_day(event['cfp_end'])}")
+    if event.get("cfp_end") and event["cfp_end"] >= today.isoformat():
+        extras.append(f"📝 Appel à contributions avant le **{format_day(event['cfp_end'], today, weekday=False)}**")
     if event.get("prize"):
-        lines.append(f"💰 Dotation : {event['prize']}")
-    if event.get("organizer"):
-        lines.append(f"🏢 {event['organizer']}")
+        extras.append(f"💰 {event['prize']}")
     if event.get("ctf_format"):
-        lines.append(f"🧩 Format : {event['ctf_format']}")
+        extras.append(f"🧩 {event['ctf_format']}")
 
-    return lines
+    return extras
+
+
+def section_of(event):
+    if event.get("location_class") == "france":
+        return "france"
+    if event["kind"] in {"academic", "conference"} and event.get("location_class") != "online":
+        return "major"
+    return "online"
 
 
 def build_embed(event, today=None):
-    score = event.get("score", 0)
+    kind = KIND_LABELS.get(event["kind"], event["kind"])
+    domains = " · ".join(event.get("domains", []))
+    author = kind.upper() if not domains else f"{kind.upper()}  ·  {domains}"
 
-    description_lines = [f"📅 {format_dates(event, today)}", format_place(event)]
-    description_lines += build_extras(event, today)
+    lines = [f"📅 {format_dates(event, today)}", format_place(event)]
+    lines += build_extras(event, today)
 
-    themes = " · ".join(event.get("domains", [])) or "Autre"
-    topics = [topic for topic in event.get("topics", []) if topic and topic.lower() not in {"conference", "ctf"}]
-    if topics:
-        themes += "\n" + ", ".join(topics[:5])
+    reasons = [reason for reason in event.get("reasons", []) if reason not in REDUNDANT_REASONS]
+    # Le délai de CFP est déjà affiché en clair au-dessus.
+    reasons = [reason for reason in reasons if not reason.startswith("appel à contributions")]
+    if reasons:
+        lines.append(f"> {' · '.join(reasons)}")
+
+    # "🟢 À NE PAS RATER" devient "🟢 À ne pas rater" : moins criard en pied de carte.
+    emoji, _, label = event.get("priority", "⚪ FAIBLE PRIORITÉ").partition(" ")
+    priority = f"{emoji} {label.capitalize()}"
+    sources = ", ".join(event.get("sources", [event["source"]]))
 
     return {
+        "author": {"name": author[:256]},
         "title": event["title"][:256],
         "url": event["url"],
-        "description": "\n".join(description_lines)[:1500],
-        "color": 0x57F287 if score >= 60 else 0xFEE75C if score >= 40 else 0x99AAB5,
-        "fields": [
-            {
-                "name": "Type",
-                "value": KIND_LABELS.get(event["kind"], event["kind"]),
-                "inline": True,
-            },
-            {
-                "name": "Pertinence",
-                "value": f"{event.get('priority', '⚪ FAIBLE PRIORITÉ')}\nScore : **{score}**",
-                "inline": True,
-            },
-            {
-                "name": "Thématiques",
-                "value": themes[:1024],
-                "inline": True,
-            },
-            {
-                "name": "Pourquoi",
-                "value": (" • ".join(event.get("reasons", [])) or "—")[:1024],
-                "inline": False,
-            },
-        ],
-        "footer": {"text": "Source : " + ", ".join(event.get("sources", [event["source"]]))},
+        "description": "\n".join(lines)[:1500],
+        "color": KIND_COLORS.get(event["kind"], 0x99AAB5),
+        "footer": {"text": f"{priority}  ·  score {event.get('score', 0)}  ·  {sources}"},
     }
 
 
 def embed_size(embed):
-    size = len(embed["title"]) + len(embed["description"]) + len(embed["footer"]["text"])
-    return size + sum(len(field["name"]) + len(field["value"]) for field in embed["fields"])
+    return (
+        len(embed["author"]["name"])
+        + len(embed["title"])
+        + len(embed["description"])
+        + len(embed["footer"]["text"])
+    )
 
 
 def build_payloads(events, today=None):
-    header = (
-        "📡 **COMMUNITY RADAR**\n"
-        f"**{len(events)} nouvel(le)s événement(s) à venir** — "
-        "conférences, hackathons, CTF, meetups.\n"
-        "_Score = adéquation au radar (thème, lieu, notoriété), pas qualité de l'événement._"
+    """
+    Un message par section (France, grandes conférences, en ligne), chacun
+    avec son titre : le digest se lit par blocs au lieu d'une pile de cartes.
+    """
+    grouped = {key: [] for key, _ in SECTIONS}
+    for event in events:
+        grouped[section_of(event)].append(event)
+
+    summary = "  ·  ".join(
+        f"{title.split()[0]} {len(grouped[key])}" for key, title in SECTIONS if grouped[key]
     )
+    header = f"## 📡 Community Radar\n**{len(events)} nouveaux événements**  —  {summary}"
 
     payloads = []
-    current = {"content": header, "embeds": []}
-    used = len(header)
+    first = True
+    for key, title in SECTIONS:
+        section = sorted(grouped[key], key=lambda event: event["start"])
+        if not section:
+            continue
 
-    for event in events:
-        embed = build_embed(event, today)
-        size = embed_size(embed)
-        if current["embeds"] and (
-            len(current["embeds"]) >= DISCORD_MAX_EMBEDS or used + size > DISCORD_MAX_CHARS
-        ):
-            payloads.append(current)
-            current = {"embeds": []}
-            used = 0
-        current["embeds"].append(embed)
-        used += size
+        content = f"### {title}"
+        if first:
+            content = f"{header}\n\n{content}"
+            first = False
 
-    if current["embeds"]:
+        current = {"content": content, "embeds": []}
+        used = len(content)
+        for event in section:
+            embed = build_embed(event, today)
+            size = embed_size(embed)
+            if current["embeds"] and (
+                len(current["embeds"]) >= DISCORD_MAX_EMBEDS or used + size > DISCORD_MAX_CHARS
+            ):
+                payloads.append(current)
+                current = {"embeds": []}
+                used = 0
+            current["embeds"].append(embed)
+            used += size
         payloads.append(current)
 
     return payloads
@@ -292,8 +330,6 @@ def main():
         return
 
     selected = select_diverse(relevant, limit=MAX_NEW_EVENTS)
-    # Lecture plus naturelle dans Discord : du plus proche au plus lointain.
-    selected.sort(key=lambda event: event["start"])
 
     print(f"\n📡 Envoi de {len(selected)} événements ({len(relevant)} pertinents en attente)", flush=True)
     for event in selected:

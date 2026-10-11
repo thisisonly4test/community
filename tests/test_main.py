@@ -67,19 +67,43 @@ class EmbedTest(unittest.TestCase):
         )
         embed = main.build_embed(item, TODAY)
         self.assertEqual(embed["title"], "Pass the SALT")
-        self.assertIn("🇫🇷 Lille, France", embed["description"])
-        self.assertIn("jeu. 1 juil. 2027 → sam. 3 juil. 2027", embed["description"])
-        self.assertIn("Appel à contributions", embed["description"])
-        self.assertEqual(embed["fields"][0]["value"], scoring.KIND_LABELS["conference"])
+        self.assertEqual(embed["author"]["name"], "🎤 CONFÉRENCE  ·  Cybersécurité")
+        self.assertEqual(embed["color"], main.KIND_COLORS["conference"])
+        self.assertIn("📍 **Lille**, France 🇫🇷", embed["description"])
+        self.assertIn("📅 **jeu. 1 juil. 2027** → sam. 3 juil. 2027", embed["description"])
+        self.assertIn("Appel à contributions avant le **1 nov.**", embed["description"])
+        # Lieu, thème et CFP sont déjà visibles : seule la notoriété reste en citation.
+        self.assertTrue(embed["description"].endswith("> événement reconnu"))
+        self.assertIn("score", embed["footer"]["text"])
+
+    def test_reasons_quote(self):
+        item = event("BSides Paris", city="Paris", country="France")
+        self.assertIn("> événement reconnu", main.build_embed(item, TODAY)["description"])
 
     def test_dates_wording(self):
-        self.assertIn("(demain)", main.format_dates({"start": "2026-10-12", "end": "2026-10-12"}, TODAY))
-        self.assertIn("(déjà ouvert)", main.format_dates({"start": "2026-10-01", "end": "2026-11-12"}, TODAY))
+        self.assertIn("*demain*", main.format_dates({"start": "2026-10-12", "end": "2026-10-12"}, TODAY))
+        self.assertIn("*déjà ouvert*", main.format_dates({"start": "2026-10-01", "end": "2026-11-12"}, TODAY))
+        # Année masquée quand c'est l'année en cours.
+        self.assertEqual(main.format_day("2026-10-12", TODAY), "lun. 12 oct.")
+
+    def test_sections(self):
+        items = [
+            event("Online Hackathon", kind="hackathon", online=True, source="Devpost"),
+            event("CCS", kind="academic", city="The Hague", country="Netherlands", source="sec-deadlines"),
+            event("BSides Paris", city="Paris", country="France"),
+            event("Robot CTF", kind="ctf", online=True, source="CTFtime"),
+        ]
+        payloads = main.build_payloads(items, TODAY)
+        self.assertEqual(len(payloads), 3)
+        self.assertIn("## 📡 Community Radar", payloads[0]["content"])
+        self.assertIn("### 🇫🇷 En France", payloads[0]["content"])
+        self.assertEqual(payloads[1]["content"], "### 🌍 Grandes conférences")
+        self.assertEqual(payloads[2]["content"], "### 🌐 En ligne")
+        self.assertEqual(len(payloads[2]["embeds"]), 2)
 
     def test_payloads_respect_discord_limits(self):
         items = [event(f"Cyber conference {i}" + " x" * 80, city="Paris", country="France") for i in range(25)]
         payloads = main.build_payloads(items, TODAY)
-        self.assertIn("COMMUNITY RADAR", payloads[0]["content"])
         self.assertEqual(sum(len(p["embeds"]) for p in payloads), 25)
         for payload in payloads:
             self.assertLessEqual(len(payload["embeds"]), main.DISCORD_MAX_EMBEDS)

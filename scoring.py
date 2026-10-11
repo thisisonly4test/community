@@ -123,7 +123,7 @@ KIND_LABELS = {
     "conference": "🎤 Conférence",
     "hackathon": "🏆 Hackathon",
     "ctf": "🚩 CTF",
-    "meetup": "🤝 Meetup / événement local",
+    "meetup": "🤝 Meetup",
 }
 
 SOURCE_PRIORITY = ["sec-deadlines", "ai-deadlines", "confs.tech", "dev.events", "MLH", "Devpost", "CTFtime", "Luma"]

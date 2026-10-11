@@ -94,7 +94,21 @@ Only sent events are stored. A relevant event that missed today's quota stays in
 
 ## Discord message
 
-Each event is an embed in French: title and link, dates with countdown, place (🇫🇷 / 🌐), call-for-papers deadline, prize, organiser, kind, priority, topics and reasons. Messages are split to respect Discord's limits (10 embeds, 6000 characters).
+The digest is split into up to three messages, each with its own heading:
+
+1. 🇫🇷 **En France**: every event in France, whatever its kind.
+2. 🌍 **Grandes conférences**: conferences abroad.
+3. 🌐 **En ligne**: online hackathons, CTFs and conferences.
+
+Events are sorted by date inside each section. Each card is compact:
+
+- Small top line: kind and topics (`🏆 HACKATHON · Tech`).
+- Title linked to the event.
+- `📅` dates and countdown, `📍` place, then call-for-papers deadline, prize or CTF format when known.
+- A quoted line with the remaining reasons (notability, project format…).
+- Footer: priority, score, sources.
+
+The side colour gives the kind: purple academic, blue conference, orange hackathon, red CTF, green meetup. Messages respect Discord's limits (10 embeds, 6000 characters).
 
 ## Setup
 
